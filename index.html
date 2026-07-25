@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Birthday Radar — birthdays of your Telegram contacts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1d1530;
+    --ink-2:#2a2044;
+    --paper:#f7f4ef;
+    --paper-dim:#c9c2d8;
+    --flame:#ffb648;
+    --flame-deep:#f08c1e;
+    --mint:#7fd8b4;
+    --rose:#ff7a90;
+    --line:rgba(247,244,239,.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"Manrope",system-ui,sans-serif;
+    min-height:100vh;
+    line-height:1.5;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:28px 20px 80px}
+
+  /* header with restrained confetti */
+  header{position:relative;padding:34px 0 26px;overflow:hidden}
+  .confetti{position:absolute;inset:0;pointer-events:none}
+  .confetti i{position:absolute;width:7px;height:7px;border-radius:2px;opacity:.85;
+    animation:drift 7s ease-in-out infinite alternate}
+  @keyframes drift{from{transform:translateY(0) rotate(0)}to{transform:translateY(10px) rotate(140deg)}}
+  @media (prefers-reduced-motion: reduce){.confetti i{animation:none}}
+  h1{
+    font-family:"Unbounded",sans-serif;font-weight:700;
+    font-size:clamp(26px,6vw,38px);line-height:1.12;letter-spacing:-.01em;
+  }
+  h1 .flame{color:var(--flame)}
+  .sub{color:var(--paper-dim);margin-top:10px;font-size:15px;max-width:46ch}
+
+  .card{
+    background:var(--ink-2);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:22px;
+    margin-top:18px;
+  }
+  .card h2{font-family:"Unbounded",sans-serif;font-weight:500;font-size:17px;margin-bottom:6px}
+  .hint{color:var(--paper-dim);font-size:13.5px;margin-bottom:14px}
+  .hint a{color:var(--mint)}
+  label{display:block;font-size:13px;color:var(--paper-dim);margin:12px 0 5px}
+  input{
+    width:100%;padding:13px 14px;border-radius:11px;
+    border:1px solid var(--line);background:var(--ink);
+    color:var(--paper);font-family:"JetBrains Mono",monospace;font-size:16px;
+  }
+  input:focus{outline:2px solid var(--flame);outline-offset:1px;border-color:transparent}
+  button{
+    margin-top:16px;width:100%;padding:14px;border:0;border-radius:12px;
+    background:var(--flame);color:#241300;font-family:"Manrope",sans-serif;
+    font-weight:700;font-size:16px;cursor:pointer;
+  }
+  button:hover{background:var(--flame-deep)}
+  button:focus-visible{outline:2px solid var(--paper);outline-offset:2px}
+  button:disabled{opacity:.5;cursor:default}
+  button.ghost{background:transparent;color:var(--paper-dim);border:1px solid var(--line);font-weight:500}
+  button.ghost:hover{color:var(--paper)}
+  .error{margin-top:12px;color:var(--rose);font-size:14px;white-space:pre-wrap}
+  .ok{margin-top:12px;color:var(--mint);font-size:14px}
+
+  /* progress */
+  .bar{height:10px;border-radius:6px;background:var(--ink);border:1px solid var(--line);overflow:hidden;margin-top:14px}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--flame),var(--rose));transition:width .3s}
+  .progress-note{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--paper-dim);margin-top:8px}
+
+  /* results — the countdown list is the signature element */
+  .row{
+    display:flex;align-items:center;gap:14px;
+    padding:14px 4px;border-bottom:1px solid var(--line);
+  }
+  .row:last-child{border-bottom:0}
+  .days{
+    min-width:74px;text-align:center;
+    font-family:"Unbounded",sans-serif;font-weight:700;font-size:26px;
+    color:var(--flame);line-height:1;
+  }
+  .days small{display:block;font-family:"Manrope",sans-serif;font-weight:500;font-size:10.5px;color:var(--paper-dim);margin-top:4px;letter-spacing:.06em;text-transform:uppercase}
+  .row.today .days{color:var(--rose)}
+  .who{flex:1;min-width:0}
+  .who b{font-size:16px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who span{font-size:13px;color:var(--paper-dim)}
+  .when{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--paper);text-align:right}
+  .when small{display:block;font-size:11px;color:var(--paper-dim)}
+  .empty{color:var(--paper-dim);font-size:14.5px;padding:8px 0}
+
+  footer{margin-top:26px;color:var(--paper-dim);font-size:12.5px}
+  footer a{color:var(--mint)}
+  .screen{display:none}
+  .screen.active{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="confetti" aria-hidden="true"></div>
+    <h1>Birthday <span class="flame">Radar</span></h1>
+    <p class="sub">See which of your Telegram contacts have birthdays coming up — sorted by how soon. Everything runs in your browser; nothing is sent anywhere else.</p>
+  </header>
+
+  <!-- Screen 0: developer setup (only shown if API_ID/API_HASH not filled in) -->
+  <section class="card screen" id="scr-setup">
+    <h2>One-time setup</h2>
+    <p class="hint">This copy of the page has no API credentials baked in. Get <b>api_id</b> and <b>api_hash</b> at <a href="https://my.telegram.org" target="_blank" rel="noopener">my.telegram.org</a> → API development tools, then paste them here (they stay on this device).</p>
+    <label for="in-apiid">api_id</label>
+    <input id="in-apiid" inputmode="numeric" autocomplete="off">
+    <label for="in-apihash">api_hash</label>
+    <input id="in-apihash" autocomplete="off">
+    <button id="btn-setup">Continue</button>
+    <p class="error" id="err-setup"></p>
+  </section>
+
+  <!-- Screen 1: phone -->
+  <section class="card screen" id="scr-phone">
+    <h2>Step 1 · Your phone number</h2>
+    <p class="hint">Sign in with your own Telegram account. Telegram will send a login code to your Telegram app (not SMS). Use international format.</p>
+    <label for="in-phone">Phone number</label>
+    <input id="in-phone" type="tel" placeholder="+380 99 123 45 67" autocomplete="tel">
+    <button id="btn-phone">Send me a code</button>
+    <p class="error" id="err-phone"></p>
+  </section>
+
+  <!-- Screen 2: code -->
+  <section class="card screen" id="scr-code">
+    <h2>Step 2 · Login code</h2>
+    <p class="hint">Telegram just sent a code to your Telegram app (check the chat called “Telegram”). Enter it here. Never share this code with any person — this page uses it only to sign you in on this device.</p>
+    <label for="in-code">Code</label>
+    <input id="in-code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345">
+    <button id="btn-code">Sign in</button>
+    <p class="error" id="err-code"></p>
+  </section>
+
+  <!-- Screen 3: 2FA password -->
+  <section class="card screen" id="scr-pass">
+    <h2>Step 3 · Two-step verification</h2>
+    <p class="hint">Your account has a cloud password (two-step verification). Enter it to finish signing in. It is checked by Telegram directly.</p>
+    <label for="in-pass">Cloud password</label>
+    <input id="in-pass" type="password" autocomplete="current-password">
+    <button id="btn-pass">Confirm</button>
+    <p class="error" id="err-pass"></p>
+  </section>
+
+  <!-- Screen 4: scanning -->
+  <section class="card screen" id="scr-scan">
+    <h2>Scanning your contacts…</h2>
+    <p class="hint">Checking each contact’s profile for a birthday. Telegram limits how fast this can go, so it may take a few minutes for large contact lists. Keep this tab open.</p>
+    <div class="bar"><i id="bar-fill"></i></div>
+    <p class="progress-note" id="scan-note">Connecting…</p>
+    <p class="error" id="err-scan"></p>
+  </section>
+
+  <!-- Screen 5: results -->
+  <section class="card screen" id="scr-results">
+    <h2 id="res-title">Upcoming birthdays</h2>
+    <p class="hint" id="res-sub"></p>
+    <div id="res-list"></div>
+    <button class="ghost" id="btn-copy">Copy list as text</button>
+    <button id="btn-logout">Log out from this device</button>
+    <p class="ok" id="ok-logout"></p>
+    <p class="error" id="err-logout"></p>
+  </section>
+
+  <footer>
+    <p>Privacy: this page talks only to Telegram’s own servers, using the same official API as Telegram’s web apps. Your session lives in this tab’s memory and disappears when you close it — but for tidiness, press “Log out” when you’re done, or remove the session later in Telegram → Settings → Devices. You’ll only see birthdays of contacts who added one and whose privacy settings allow you to see it.</p>
+  </footer>
+</div>
+
+<script src="./gramjs.bundle.js"></script>
+<script>
+"use strict";
+/* ====== FILL THESE IN (from https://my.telegram.org) ====== */
+const API_ID = 0;              // e.g. 1234567
+const API_HASH = "";           // e.g. "0123456789abcdef0123456789abcdef"
+/* ========================================================== */
+
+const { TelegramClient, Api, StringSession, bigInt } = window.gram;
+
+const $ = (id) => document.getElementById(id);
+const screens = ["scr-setup","scr-phone","scr-code","scr-pass","scr-scan","scr-results"];
+function show(id){
+  screens.forEach(s => $(s).classList.toggle("active", s === id));
+  const first = $(id).querySelector("input");
+  if (first) setTimeout(() => first.focus(), 50);
+}
+
+/* small, restrained confetti in the header only */
+(function confetti(){
+  const host = document.querySelector(".confetti");
+  const colors = ["#ffb648","#ff7a90","#7fd8b4","#c9c2d8"];
+  for (let k = 0; k < 14; k++){
+    const i = document.createElement("i");
+    i.style.left = (Math.random()*100) + "%";
+    i.style.top = (Math.random()*90) + "%";
+    i.style.background = colors[k % colors.length];
+    i.style.animationDelay = (Math.random()*4) + "s";
+    i.style.animationDuration = (5 + Math.random()*5) + "s";
+    host.appendChild(i);
+  }
+})();
+
+let apiId = API_ID, apiHash = API_HASH;
+let client = null;
+
+/* promise-based prompts so client.start() can await UI input */
+let resolveCode = null, resolvePass = null;
+
+function fail(id, err){
+  console.error(err);
+  let msg = (err && (err.errorMessage || err.message)) || String(err);
+  const map = {
+    "PHONE_NUMBER_INVALID": "That phone number doesn’t look right. Use international format, e.g. +380…",
+    "PHONE_CODE_INVALID": "That code didn’t match. Check the message from Telegram and try again.",
+    "PHONE_CODE_EXPIRED": "The code expired. Reload the page and start again.",
+    "PASSWORD_HASH_INVALID": "Wrong cloud password. Try again.",
+    "AUTH_RESTART": "Telegram asked to restart the login. Reload the page and try again.",
+  };
+  for (const k in map) if (msg.includes(k)) { msg = map[k]; break; }
+  if (msg.includes("FLOOD")) msg = "Telegram says: too many attempts. Wait a while, then try again. (" + msg + ")";
+  $(id).textContent = msg;
+}
+
+async function startLogin(phone){
+  client = new TelegramClient(new StringSession(""), apiId, apiHash, {
+    connectionRetries: 3,
+  });
+  await client.start({
+    phoneNumber: async () => phone,
+    phoneCode: async () => {
+      show("scr-code");
+      return await new Promise(res => { resolveCode = res; });
+    },
+    password: async () => {
+      show("scr-pass");
+      return await new Promise(res => { resolvePass = res; });
+    },
+    onError: (err) => { fail("err-code", err); return true; },
+  });
+}
+
+/* ---------- birthday math ---------- */
+function nextOccurrence(day, month, today){
+  const y = today.getFullYear();
+  const make = (yy) => {
+    if (month === 2 && day === 29){
+      const leap = (yy % 4 === 0 && yy % 100 !== 0) || yy % 400 === 0;
+      return leap ? new Date(yy, 1, 29) : new Date(yy, 2, 1); // Mar 1 on non-leap years
+    }
+    return new Date(yy, month - 1, day);
+  };
+  let d = make(y);
+  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (d < t0) d = make(y + 1);
+  return d;
+}
+function daysBetween(a, b){
+  const ms = 24*60*60*1000;
+  const a0 = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const b0 = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((b0 - a0) / ms);
+}
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/* ---------- scan ---------- */
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function scanContacts(){
+  show("scr-scan");
+  const note = $("scan-note"), fill = $("bar-fill");
+  note.textContent = "Loading your contact list…";
+
+  const res = await client.invoke(new Api.contacts.GetContacts({ hash: bigInt(0) }));
+  const users = (res.users || []).filter(u => u.className === "User" && !u.bot && !u.deleted);
+  window.__totalContacts = users.length;
+  if (!users.length){
+    note.textContent = "No contacts found on this account.";
+    return [];
+  }
+
+  const found = [];
+  for (let i = 0; i < users.length; i++){
+    const u = users[i];
+    note.textContent = `Checking ${i + 1} / ${users.length} — found ${found.length} birthday${found.length === 1 ? "" : "s"}`;
+    fill.style.width = ((i + 1) / users.length * 100).toFixed(1) + "%";
+    try {
+      const full = await client.invoke(new Api.users.GetFullUser({
+        id: new Api.InputUser({ userId: u.id, accessHash: u.accessHash || bigInt(0) }),
+      }));
+      const b = full.fullUser && full.fullUser.birthday;
+      if (b) found.push({ user: u, day: b.day, month: b.month, year: b.year || null });
+    } catch (e){
+      if (e && e.seconds){ // FloodWait: Telegram asks us to slow down
+        for (let s = e.seconds; s > 0; s--){
+          note.textContent = `Telegram asked to slow down — resuming in ${s}s (checked ${i} / ${users.length})`;
+          await sleep(1000);
+        }
+        i--; // retry the same contact
+        continue;
+      }
+      console.warn("Skipping", u.firstName, e);
+    }
+    await sleep(600); // stay well under rate limits
+  }
+  return found;
+}
+
+/* ---------- results ---------- */
+let lastRows = [];
+function renderResults(found, totalContacts){
+  show("scr-results");
+  const today = new Date();
+  const rows = found.map(f => {
+    const next = nextOccurrence(f.day, f.month, today);
+    const days = daysBetween(today, next);
+    const turning = f.year ? (next.getFullYear() - f.year) : null;
+    const name = [f.user.firstName, f.user.lastName].filter(Boolean).join(" ") || ("+" + (f.user.phone || "?"));
+    return { name, username: f.user.username ? "@" + f.user.username : "", days, next, turning, d: f.day, m: f.month };
+  }).sort((a, b) => a.days - b.days || a.name.localeCompare(b.name));
+  lastRows = rows;
+
+  $("res-sub").textContent = rows.length
+    ? `${rows.length} of your ${totalContacts} contacts share a birthday on Telegram, ranked by how soon it comes.`
+    : `None of your ${totalContacts} contacts have a visible birthday on Telegram. Most people simply never set one — that’s normal.`;
+
+  const list = $("res-list");
+  list.innerHTML = "";
+  if (!rows.length){
+    list.innerHTML = '<p class="empty">Nothing to show yet. Nudge your friends to add a birthday in Telegram → Settings → My profile 🎂</p>';
+    return;
+  }
+  for (const r of rows){
+    const row = document.createElement("div");
+    row.className = "row" + (r.days === 0 ? " today" : "");
+    const daysLabel = r.days === 0 ? "🎂" : r.days;
+    const daysSub = r.days === 0 ? "today!" : (r.days === 1 ? "day left" : "days left");
+    row.innerHTML =
+      `<div class="days">${daysLabel}<small>${daysSub}</small></div>` +
+      `<div class="who"><b></b><span></span></div>` +
+      `<div class="when">${r.d} ${MONTHS[r.m - 1]}<small>${r.turning ? "turns " + r.turning : "&nbsp;"}</small></div>`;
+    row.querySelector("b").textContent = r.name;
+    row.querySelector("span").textContent = r.username;
+    list.appendChild(row);
+  }
+}
+
+/* ---------- wire up ---------- */
+$("btn-setup").onclick = () => {
+  const id = parseInt($("in-apiid").value.trim(), 10);
+  const hash = $("in-apihash").value.trim();
+  if (!id || !/^[0-9a-f]{32}$/i.test(hash)){
+    $("err-setup").textContent = "api_id must be a number and api_hash a 32-character hex string.";
+    return;
+  }
+  apiId = id; apiHash = hash;
+  show("scr-phone");
+};
+
+$("btn-phone").onclick = async () => {
+  const phone = $("in-phone").value.replace(/[^\d+]/g, "");
+  if (!/^\+?\d{7,15}$/.test(phone)){ $("err-phone").textContent = "Enter your number in international format, e.g. +380991234567"; return; }
+  $("btn-phone").disabled = true;
+  $("err-phone").textContent = "";
+  try {
+    await startLogin(phone);            // resolves only after full sign-in
+    const found = await scanContacts();
+    const total = window.__totalContacts || 0;
+    renderResults(found, total);
+  } catch (e){
+    fail("err-phone", e);
+    show("scr-phone");
+    $("btn-phone").disabled = false;
+  }
+};
+
+$("btn-code").onclick = () => {
+  const v = $("in-code").value.trim();
+  if (!v){ $("err-code").textContent = "Enter the code from your Telegram app."; return; }
+  $("err-code").textContent = "";
+  if (resolveCode) resolveCode(v);
+};
+$("btn-pass").onclick = () => {
+  const v = $("in-pass").value;
+  if (!v){ $("err-pass").textContent = "Enter your cloud password."; return; }
+  $("err-pass").textContent = "";
+  if (resolvePass) resolvePass(v);
+};
+
+/* enter key submits the visible step */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const active = screens.find(s => $(s).classList.contains("active"));
+  const btn = { "scr-setup":"btn-setup","scr-phone":"btn-phone","scr-code":"btn-code","scr-pass":"btn-pass" }[active];
+  if (btn) $(btn).click();
+});
+
+$("btn-copy").onclick = async () => {
+  const lines = lastRows.map(r =>
+    `${String(r.days).padStart(3)} d — ${r.d} ${MONTHS[r.m-1]} — ${r.name}${r.username ? " (" + r.username + ")" : ""}${r.turning ? " — turns " + r.turning : ""}`);
+  try { await navigator.clipboard.writeText(lines.join("\n")); $("btn-copy").textContent = "Copied ✓"; }
+  catch { $("btn-copy").textContent = "Couldn’t copy — select manually"; }
+};
+
+$("btn-logout").onclick = async () => {
+  $("btn-logout").disabled = true;
+  try {
+    await client.invoke(new Api.auth.LogOut());
+    await client.disconnect();
+    $("ok-logout").textContent = "Logged out. This device no longer has access to your account. You can close the tab.";
+  } catch (e){
+    fail("err-logout", e);
+    $("btn-logout").disabled = false;
+  }
+};
+
+/* boot */
+if (!API_ID || !API_HASH) show("scr-setup"); else show("scr-phone");
+</script>
+</body>
+</html>
