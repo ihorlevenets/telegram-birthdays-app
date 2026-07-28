@@ -42,6 +42,11 @@
   .lead-2{margin-top:14px;color:var(--gray);font-size:15px;max-width:60ch;opacity:.85}
 
   section{margin-top:34px;border-top:1px solid var(--line);padding-top:24px}
+  section.boxed{
+    border:1px solid var(--yellow);
+    background:rgba(255,229,91,.08);
+    padding:24px 22px 28px;
+  }
   h2{
     font-weight:700;text-transform:uppercase;font-size:19px;letter-spacing:.03em;
     margin-bottom:8px;
@@ -118,11 +123,11 @@
     <img class="logo" src="data:image/png;base64,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" alt="Логотип">
     <h1>Що по днях народження?</h1>
     <p class="lead">Отримай список з днів народження усіх своїх контактів, посортованих по датах протягом всього року, починаючи від сьогодні.</p>
-    <p class="lead-2">Для цього тобі спершу треба буде залогінитись своїм телеграмом. Якщо що, ця сторінка напряму комунікує з сервером телеграму, тому твої дані нікуди не потраплять і доступу до акаунту ні в кого крім тебе не буде</p>
+    <p class="lead-2">Для цього тобі спершу треба буде залогінитись своїм Телеграмом. Якщо що, ця сторінка напряму комунікує з сервером Телеграму, тому твої дані нікуди не потраплять і доступу до акаунту ні в кого крім тебе не буде</p>
   </header>
 
   <!-- Разове налаштування (показується лише якщо API_ID/API_HASH не вписані в код) -->
-  <section class="screen" id="scr-setup">
+  <section class="screen boxed" id="scr-setup">
     <h2><span class="num">00</span>Разове налаштування</h2>
     <p class="hint">У цій копії сторінки не вписані API-ключі. Отримай <b>api_id</b> та <b>api_hash</b> на my.telegram.org → API development tools і встав їх сюди (вони залишаться на цьому пристрої).</p>
     <label for="in-apiid">api_id</label>
@@ -134,9 +139,9 @@
   </section>
 
   <!-- Крок 1: номер -->
-  <section class="screen" id="scr-phone">
+  <section class="screen boxed" id="scr-phone">
     <h2><span class="num">01</span>Твій номер телефону</h2>
-    <p class="hint">Вхід через твій акаунт Телеграму. Код прийде повідомленням у застосунок (не SMS). Номер — у міжнародному форматі.</p>
+    <p class="hint">Вхід через твій акаунт Телеграму. Код-підтвердження прийде повідомленням у застосунок (не SMS).</p>
     <label for="in-phone">Номер телефону</label>
     <input id="in-phone" type="tel" placeholder="+380 99 123 45 67" autocomplete="tel">
     <button id="btn-phone">Надіслати код</button>
@@ -144,9 +149,9 @@
   </section>
 
   <!-- Крок 2: код -->
-  <section class="screen" id="scr-code">
+  <section class="screen boxed" id="scr-code">
     <h2><span class="num">02</span>Код для входу</h2>
-    <p class="hint">Телеграм щойно надіслав код у застосунок — глянь чат «Telegram». Нікому не пересилай цей код: тут він потрібен лише для входу на цьому пристрої.</p>
+    <p class="hint">Телеграм щойно надіслав код у застосунок — глянь чат «Telegram». Тут цей код потрібен лише для входу в твій акаунт на цій веб-сторінці, щоб з нього витягнути всі дні народження.</p>
     <label for="in-code">Код</label>
     <input id="in-code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345">
     <button id="btn-code">Увійти</button>
@@ -154,7 +159,7 @@
   </section>
 
   <!-- Крок 3: хмарний пароль -->
-  <section class="screen" id="scr-pass">
+  <section class="screen boxed" id="scr-pass">
     <h2><span class="num">03</span>Хмарний пароль</h2>
     <p class="hint">У тебе ввімкнена двоетапна перевірка. Введи хмарний пароль — його перевіряє безпосередньо Телеграм.</p>
     <label for="in-pass">Пароль</label>
@@ -164,7 +169,7 @@
   </section>
 
   <!-- Сканування -->
-  <section class="screen" id="scr-scan">
+  <section class="screen boxed" id="scr-scan">
     <h2>Скануємо контакти…</h2>
     <p class="hint">Перевіряю профіль кожного контакту. Телеграм обмежує швидкість запитів, тому на великому списку це може зайняти кілька хвилин. Не закривай вкладку.</p>
     <div class="bar"><i id="bar-fill"></i></div>
@@ -177,8 +182,8 @@
     <h2 id="res-title">Дні народження твоїх контактів</h2>
     <p class="hint" id="res-sub"></p>
     <div id="res-list"></div>
-    <button class="ghost" id="btn-copy">Скопіювати як текст</button>
-    <button id="btn-logout">Вийти з сесії на цьому пристрої</button>
+    <button class="ghost" id="btn-csv">Завантажити в форматі таблички (.csv)</button>
+    <button id="btn-logout">Вийти з сесії на цій веб-сторінці</button>
     <p class="ok" id="ok-logout"></p>
     <p class="error" id="err-logout"></p>
   </section>
@@ -415,11 +420,27 @@ document.addEventListener("keydown", (e) => {
   if (btn) $(btn).click();
 });
 
-$("btn-copy").onclick = async () => {
-  const lines = lastRows.map(r =>
-    String(r.days).padStart(3) + " дн — " + r.d + " " + MONTHS[r.m-1] + " — " + r.name + (r.username ? " (" + r.username + ")" : "") + (r.turning ? " — виповниться " + r.turning : ""));
-  try { await navigator.clipboard.writeText(lines.join("\n")); $("btn-copy").textContent = "Скопійовано ✓"; }
-  catch { $("btn-copy").textContent = "Не вдалося — виділи вручну"; }
+function csvEscape(v){ return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }
+function buildCsv(rows){
+  const header = ["Як скоро", "Хто", "Юзернейм", "Дата народження"];
+  const body = rows.map(r => [
+    r.days === 0 ? "сьогодні" : "через " + r.days + " " + pluralUk(r.days, "день", "дні", "днів"),
+    r.name,
+    r.username,
+    r.d + " " + MONTHS[r.m - 1] + (r.turning ? " " + (r.next.getFullYear() - r.turning) : ""),
+  ]);
+  // \uFEFF (BOM) + ";" — щоб український Excel відкривав табличку коректно
+  return "\uFEFF" + [header].concat(body).map(row => row.map(csvEscape).join(";")).join("\r\n");
+}
+$("btn-csv").onclick = () => {
+  const blob = new Blob([buildCsv(lastRows)], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "dni_narodzhennya.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
 $("btn-logout").onclick = async () => {
