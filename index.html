@@ -141,7 +141,7 @@
   <!-- Крок 1: номер -->
   <section class="screen boxed" id="scr-phone">
     <h2><span class="num">01</span>Твій номер телефону</h2>
-    <p class="hint">Вхід через твій акаунт Телеграму. Код-підтвердження прийде повідомленням у застосунок (не SMS).</p>
+    <p class="hint">Вхід через твій акаунт Телеграму. Код-підтвердження зазвичай приходить повідомленням у застосунок Телеграм на іншому твоєму пристрої (рідше — SMS).</p>
     <label for="in-phone">Номер телефону</label>
     <input id="in-phone" type="tel" placeholder="+380 99 123 45 67" autocomplete="tel">
     <button id="btn-phone">Надіслати код</button>
@@ -151,10 +151,12 @@
   <!-- Крок 2: код -->
   <section class="screen boxed" id="scr-code">
     <h2><span class="num">02</span>Код для входу</h2>
-    <p class="hint">Телеграм щойно надіслав код у застосунок — глянь чат «Telegram». Тут цей код потрібен лише для входу в твій акаунт на цій веб-сторінці, щоб з нього витягнути всі дні народження.</p>
+    <p class="hint" id="code-hint">Телеграм щойно надіслав код у застосунок — глянь чат «Telegram». Тут цей код потрібен лише для входу в твій акаунт на цій веб-сторінці, щоб з нього витягнути всі дні народження.</p>
     <label for="in-code">Код</label>
     <input id="in-code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345">
     <button id="btn-code">Увійти</button>
+    <button class="ghost" id="btn-resend" hidden>Не прийшов код? Надіслати інакше</button>
+    <button class="ghost" id="btn-back">Змінити номер</button>
     <p class="error" id="err-code"></p>
   </section>
 
@@ -233,7 +235,7 @@ function pluralUk(n, one, few, many){
 
 let apiId = API_ID, apiHash = API_HASH;
 let client = null;
-let resolveCode = null, resolvePass = null;
+let phoneNumber = "", phoneCodeHash = "";
 
 function fail(id, err){
   console.error(err);
@@ -244,28 +246,85 @@ function fail(id, err){
     "PHONE_CODE_EXPIRED": "Код прострочився. Перезавантаж сторінку і почни спочатку.",
     "PASSWORD_HASH_INVALID": "Хмарний пароль неправильний. Спробуй ще раз.",
     "AUTH_RESTART": "Телеграм просить перезапустити вхід. Перезавантаж сторінку і спробуй ще раз.",
+    "PHONE_NUMBER_BANNED": "Телеграм каже, що цей номер заблокований.",
+    "PHONE_NUMBER_FLOOD": "Телеграм каже: забагато запитів коду на цей номер. Зачекай кілька годин і спробуй знову.",
+    "SEND_CODE_UNAVAILABLE": "Телеграм вичерпав способи надіслати код. Зачекай трохи і почни спочатку.",
+    "PHONE_NUMBER_UNOCCUPIED": "На цей номер немає акаунта Телеграму.",
+    "API_ID_INVALID": "API-ключі (api_id / api_hash) недійсні — перевір їх на my.telegram.org.",
   };
   for (const k in map) if (msg.includes(k)) { msg = map[k]; break; }
   if (msg.includes("FLOOD")) msg = "Телеграм каже: забагато спроб. Зачекай трохи і спробуй знову. (" + msg + ")";
   $(id).textContent = msg;
 }
 
+/* ---------- вхід ----------
+   Раніше тут був client.start() із gramjs. Він ховав справжню причину, чому код не приходить:
+   помилка SendCode потрапляла в прихований блок кроку 2, а користувач бачив лише "AUTH_USER_CANCEL";
+   а тип доставки коду (застосунок / SMS / потрібна пошта) взагалі ніде не показувався.
+   Тому робимо кроки вручну: SendCode → (ResendCode) → SignIn → CheckPassword. */
+
+const CODE_TYPES = {
+  "auth.SentCodeTypeApp": (t) => "Телеграм надіслав " + t.length + "-значний код у застосунок Телеграм на іншому твоєму пристрої — це повідомлення від офіційного акаунта «Telegram» (з синьою галочкою) у списку чатів. Це не SMS.",
+  "auth.SentCodeTypeSms": (t) => "Телеграм надіслав " + t.length + "-значний код у SMS на цей номер.",
+  "auth.SentCodeTypeSmsWord": () => "Телеграм надіслав SMS зі словом-кодом. Введи слово з повідомлення.",
+  "auth.SentCodeTypeSmsPhrase": () => "Телеграм надіслав SMS із фразою-кодом. Введи фразу з повідомлення.",
+  "auth.SentCodeTypeCall": (t) => "Телеграм зараз подзвонить і продиктує " + t.length + "-значний код.",
+  "auth.SentCodeTypeFlashCall": () => "Телеграм зробить скинутий дзвінок — код це номер, з якого дзвонили.",
+  "auth.SentCodeTypeMissedCall": (t) => "Телеграм зробить скинутий дзвінок — код це останні " + t.length + " цифри номера, з якого дзвонили.",
+  "auth.SentCodeTypeFragmentSms": (t) => "Код надіслано через Fragment: " + (t.url || "fragment.com") + ". Це номер-анонім, тож код дивись там.",
+  "auth.SentCodeTypeEmailCode": (t) => "Телеграм надіслав код на твою пошту для входу" + (t.emailPattern ? " (" + t.emailPattern + ")" : "") + ".",
+};
+
+function describeSent(sent){
+  const t = sent.type;
+  const f = CODE_TYPES[t.className];
+  let txt = f ? f(t) : ("Телеграм відповів: " + t.className + ".");
+  if (sent.nextType) txt += " Якщо за хвилину нічого немає — натисни «Надіслати інакше» нижче.";
+  return txt;
+}
+
+async function newClient(){
+  if (client){ try { await client.disconnect(); } catch {} }
+  client = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 3 });
+  await client.connect();
+}
+
+// Обробляє auth.SentCode / auth.SentCodeSuccess (і від SendCode, і від ResendCode)
+async function handleSent(sent){
+  console.info("[login] SentCode:", sent.className, sent.type && sent.type.className, "next:", sent.nextType && sent.nextType.className, sent);
+  if (sent.className === "auth.SentCodeSuccess") return afterLogin();
+  if (sent.type.className === "auth.SentCodeTypeSetUpEmailRequired"){
+    throw new Error("Телеграм не надсилає код на цей вхід, поки до акаунта не прив’язана пошта для входу. Відкрий офіційний застосунок Телеграм → Налаштування → Конфіденційність → Пошта для входу (Login Email), прив’яжи пошту і спробуй ще раз.");
+  }
+  if (sent.type.className === "auth.SentCodeTypeFirebaseSms"){
+    throw new Error("Телеграм хоче надіслати код через Firebase, що працює лише в офіційних мобільних застосунках. Спробуй ще раз трохи згодом.");
+  }
+  phoneCodeHash = sent.phoneCodeHash;
+  $("code-hint").textContent = describeSent(sent);
+  $("btn-resend").hidden = !sent.nextType;
+  $("btn-resend").disabled = false;
+  $("in-code").value = "";
+  $("err-code").textContent = "";
+  $("btn-code").disabled = false;
+  show("scr-code");
+}
+
 async function startLogin(phone){
-  client = new TelegramClient(new StringSession(""), apiId, apiHash, {
-    connectionRetries: 3,
-  });
-  await client.start({
-    phoneNumber: async () => phone,
-    phoneCode: async () => {
-      show("scr-code");
-      return await new Promise(res => { resolveCode = res; });
-    },
-    password: async () => {
-      show("scr-pass");
-      return await new Promise(res => { resolvePass = res; });
-    },
-    onError: (err) => { fail("err-code", err); return true; },
-  });
+  phoneNumber = phone;
+  await newClient();
+  const sent = await client.invoke(new Api.auth.SendCode({
+    phoneNumber: phone, apiId, apiHash, settings: new Api.CodeSettings({}),
+  }));
+  await handleSent(sent);
+}
+
+async function afterLogin(){
+  try {
+    const found = await scanContacts();
+    renderResults(found, window.__totalContacts || 0);
+  } catch (e){
+    fail("err-scan", e);
+  }
 }
 
 /* ---------- дати ---------- */
@@ -385,32 +444,71 @@ $("btn-setup").onclick = () => {
 };
 
 $("btn-phone").onclick = async () => {
-  const phone = $("in-phone").value.replace(/[^\d+]/g, "");
+  let phone = $("in-phone").value.replace(/[^\d+]/g, "");
   if (!/^\+?\d{7,15}$/.test(phone)){ $("err-phone").textContent = "Введи номер у міжнародному форматі, напр. +380991234567"; return; }
+  if (!phone.startsWith("+")) phone = "+" + phone;
   $("btn-phone").disabled = true;
   $("err-phone").textContent = "";
   try {
     await startLogin(phone);
-    const found = await scanContacts();
-    renderResults(found, window.__totalContacts || 0);
   } catch (e){
     fail("err-phone", e);
     show("scr-phone");
-    $("btn-phone").disabled = false;
+  }
+  $("btn-phone").disabled = false;
+};
+
+$("btn-resend").onclick = async () => {
+  $("btn-resend").disabled = true;
+  $("err-code").textContent = "";
+  try {
+    await handleSent(await client.invoke(new Api.auth.ResendCode({ phoneNumber, phoneCodeHash })));
+  } catch (e){
+    fail("err-code", e);
+    $("btn-resend").disabled = false;
   }
 };
 
-$("btn-code").onclick = () => {
+$("btn-back").onclick = () => {
+  if (client){ client.disconnect().catch(() => {}); client = null; }
+  $("err-phone").textContent = "";
+  show("scr-phone");
+};
+
+$("btn-code").onclick = async () => {
   const v = $("in-code").value.trim();
   if (!v){ $("err-code").textContent = "Введи код із застосунку Телеграм."; return; }
   $("err-code").textContent = "";
-  if (resolveCode) resolveCode(v);
+  $("btn-code").disabled = true;
+  try {
+    const res = await client.invoke(new Api.auth.SignIn({ phoneNumber, phoneCodeHash, phoneCode: v }));
+    if (res.className === "auth.AuthorizationSignUpRequired"){
+      throw new Error("На цей номер немає акаунта Телеграму.");
+    }
+    await afterLogin();
+  } catch (e){
+    if (e.errorMessage === "SESSION_PASSWORD_NEEDED"){ show("scr-pass"); return; }
+    fail("err-code", e);
+    $("btn-code").disabled = false;
+  }
 };
-$("btn-pass").onclick = () => {
+
+$("btn-pass").onclick = async () => {
   const v = $("in-pass").value;
   if (!v){ $("err-pass").textContent = "Введи хмарний пароль."; return; }
   $("err-pass").textContent = "";
-  if (resolvePass) resolvePass(v);
+  $("btn-pass").disabled = true;
+  let realErr = null;
+  try {
+    await client.signInWithPassword({ apiId, apiHash }, {
+      password: async () => v,
+      onError: async (err) => { realErr = err; return true; }, // true = не повторювати, покажемо помилку
+    });
+    await afterLogin();
+  } catch (e){
+    fail("err-pass", realErr || e);
+    $("btn-pass").disabled = false;
+  }
 };
 
 document.addEventListener("keydown", (e) => {
