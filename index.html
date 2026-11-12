@@ -75,9 +75,6 @@
   .error{margin-top:12px;color:var(--yellow);font-size:14.5px;white-space:pre-wrap}
   .error:not(:empty)::before{content:"⚠ "}
   .ok{margin-top:12px;color:var(--gray);font-size:14.5px}
-  .qr-box{margin-top:18px;background:#fff;padding:16px;width:100%;max-width:300px;aspect-ratio:1;display:flex;align-items:center;justify-content:center}
-  .qr-box svg{width:100%;height:100%;display:block}
-  .qr-box .ok{color:#000;margin:0}
 
   /* progress */
   .bar{height:14px;border:1px solid rgba(217,217,214,.45);overflow:hidden;margin-top:16px}
@@ -148,7 +145,6 @@
     <label for="in-phone">Номер телефону</label>
     <input id="in-phone" type="tel" placeholder="+380 99 123 45 67" autocomplete="tel">
     <button id="btn-phone">Надіслати код</button>
-    <button class="ghost" id="btn-qr">Або увійти через QR-код (без коду)</button>
     <p class="error" id="err-phone"></p>
   </section>
 
@@ -160,18 +156,8 @@
     <input id="in-code" inputmode="numeric" autocomplete="one-time-code" placeholder="12345">
     <button id="btn-code">Увійти</button>
     <button class="ghost" id="btn-resend" hidden>Не прийшов код? Надіслати інакше</button>
-    <button class="ghost" id="btn-qr2">Код не приходить? Увійти через QR-код</button>
     <button class="ghost" id="btn-back">Змінити номер</button>
     <p class="error" id="err-code"></p>
-  </section>
-
-  <!-- Альтернатива: вхід через QR -->
-  <section class="screen boxed" id="scr-qr">
-    <h2><span class="num">02</span>Вхід через QR-код</h2>
-    <p class="hint">На телефоні відкрий Телеграм → <b>Налаштування → Пристрої → Під’єднати пристрій</b> (Link Desktop Device) і відскануй цей код. Код оновлюється сам кожні пів хвилини.</p>
-    <div class="qr-box" id="qr-box"><span class="ok">Генерую QR-код…</span></div>
-    <button class="ghost" id="btn-qr-back">Назад до входу за номером</button>
-    <p class="error" id="err-qr"></p>
   </section>
 
   <!-- Крок 3: хмарний пароль -->
@@ -210,7 +196,6 @@
 <div class="madeby">made by <a href="https://t.me/ihor_levenets" target="_blank" rel="noopener">@ihor_levenets</a></div>
 
 <script src="./gramjs.bundle.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
 "use strict";
 /* ====== ВПИШИ СВОЇ КЛЮЧІ (з https://my.telegram.org) ====== */
@@ -231,7 +216,7 @@ if (!window.gram){
 const { TelegramClient, Api, StringSession, bigInt } = window.gram;
 
 const $ = (id) => document.getElementById(id);
-const screens = ["scr-setup","scr-phone","scr-code","scr-qr","scr-pass","scr-scan","scr-results"];
+const screens = ["scr-setup","scr-phone","scr-code","scr-pass","scr-scan","scr-results"];
 function show(id){
   screens.forEach(s => $(s).classList.toggle("active", s === id));
   const first = $(id).querySelector("input");
@@ -251,8 +236,6 @@ function pluralUk(n, one, few, many){
 let apiId = API_ID, apiHash = API_HASH;
 let client = null;
 let phoneNumber = "", phoneCodeHash = "";
-let resolvePass = null;   // чекає на хмарний пароль з кроку 3
-let qrRunning = false;
 
 function fail(id, err){
   console.error(err);
@@ -333,53 +316,6 @@ async function startLogin(phone){
     phoneNumber: phone, apiId, apiHash, settings: new Api.CodeSettings({}),
   }));
   await handleSent(sent);
-}
-
-/* Хмарний пароль (2FA): чекаємо, поки користувач введе його на кроці 3 */
-function askPassword(){
-  $("btn-pass").disabled = false;
-  $("in-pass").value = "";
-  show("scr-pass");
-  return new Promise(res => { resolvePass = res; });
-}
-const passwordCallbacks = {
-  password: askPassword,
-  onError: async (err) => { fail("err-pass", err); return false; }, // false = попросити пароль ще раз
-};
-
-/* ---------- вхід через QR (не потребує коду взагалі) ---------- */
-function renderQr(token){
-  const b64 = btoa(String.fromCharCode(...token)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const qr = qrcode(0, "M");
-  qr.addData("tg://login?token=" + b64);
-  qr.make();
-  $("qr-box").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 0, scalable: true });
-}
-
-async function startQrLogin(){
-  if (qrRunning) { show("scr-qr"); return; }
-  if (typeof qrcode !== "function"){ fail("err-phone", new Error("Не завантажилась бібліотека QR-коду. Перевір інтернет і перезавантаж сторінку.")); return; }
-  qrRunning = true;
-  $("err-qr").textContent = "";
-  $("qr-box").innerHTML = '<span class="ok">Генерую QR-код…</span>';
-  show("scr-qr");
-  try {
-    await newClient();
-    await client.signInUserWithQrCode({ apiId, apiHash }, {
-      qrCode: async ({ token }) => renderQr(token),
-      ...passwordCallbacks,
-      onError: async (err) => {
-        if ($("scr-pass").classList.contains("active")) { fail("err-pass", err); return false; }
-        fail("err-qr", err); return true;
-      },
-    });
-    qrRunning = false;
-    await afterLogin();
-  } catch (e){
-    qrRunning = false;
-    if (!$("err-qr").textContent) fail("err-qr", e);
-    show("scr-qr");
-  }
 }
 
 async function afterLogin(){
@@ -551,32 +487,28 @@ $("btn-code").onclick = async () => {
     }
     await afterLogin();
   } catch (e){
-    if (e.errorMessage === "SESSION_PASSWORD_NEEDED"){
-      try {
-        await client.signInWithPassword({ apiId, apiHash }, passwordCallbacks);
-        await afterLogin();
-      } catch (e2){ fail("err-pass", e2); }
-      return;
-    }
+    if (e.errorMessage === "SESSION_PASSWORD_NEEDED"){ show("scr-pass"); return; }
     fail("err-code", e);
     $("btn-code").disabled = false;
   }
 };
 
-$("btn-pass").onclick = () => {
+$("btn-pass").onclick = async () => {
   const v = $("in-pass").value;
   if (!v){ $("err-pass").textContent = "Введи хмарний пароль."; return; }
   $("err-pass").textContent = "";
   $("btn-pass").disabled = true;
-  if (resolvePass){ const r = resolvePass; resolvePass = null; r(v); }
-};
-
-$("btn-qr").onclick = startQrLogin;
-$("btn-qr2").onclick = startQrLogin;
-$("btn-qr-back").onclick = () => {
-  if (client){ client.disconnect().catch(() => {}); client = null; }
-  qrRunning = false;
-  show("scr-phone");
+  let realErr = null;
+  try {
+    await client.signInWithPassword({ apiId, apiHash }, {
+      password: async () => v,
+      onError: async (err) => { realErr = err; return true; }, // true = не повторювати, покажемо помилку
+    });
+    await afterLogin();
+  } catch (e){
+    fail("err-pass", realErr || e);
+    $("btn-pass").disabled = false;
+  }
 };
 
 document.addEventListener("keydown", (e) => {
