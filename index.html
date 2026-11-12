@@ -283,9 +283,39 @@ function describeSent(sent){
   return txt;
 }
 
+/* Як клієнт представляється Телеграму (initConnection).
+   Без цього gramjs у браузері шле deviceModel "Browser", appVersion "1.0", systemLangCode "en" —
+   такі «безликі» сесії Телеграм з 2026 р. часто вважає підозрілими: відповідає «код надіслано
+   в застосунок», але сам код не доставляє. Тому шлемо реальний браузер/ОС/мову, як офіційні веб-клієнти. */
+function clientInfo(){
+  const ua = navigator.userAgent;
+  const pick = (re) => { const m = ua.match(re); return m ? m[1] : ""; };
+  let browser = "Browser";
+  if (/Edg\//.test(ua)) browser = "Edge " + pick(/Edg\/(\d+)/);
+  else if (/OPR\//.test(ua)) browser = "Opera " + pick(/OPR\/(\d+)/);
+  else if (/Firefox\//.test(ua)) browser = "Firefox " + pick(/Firefox\/(\d+)/);
+  else if (/CriOS\//.test(ua)) browser = "Chrome " + pick(/CriOS\/(\d+)/);
+  else if (/Chrome\//.test(ua)) browser = "Chrome " + pick(/Chrome\/(\d+)/);
+  else if (/Safari\//.test(ua)) browser = "Safari " + pick(/Version\/(\d+(?:\.\d+)?)/);
+  let os = "Web";
+  if (/iPhone|iPad|iPod/.test(ua)) os = "iOS " + pick(/OS (\d+[_\d]*)/).replace(/_/g, ".");
+  else if (/Android/.test(ua)) os = "Android " + pick(/Android (\d+(?:\.\d+)?)/);
+  else if (/Mac OS X/.test(ua)) os = "macOS";
+  else if (/Windows/.test(ua)) os = "Windows";
+  else if (/Linux/.test(ua)) os = "Linux";
+  const lang = (navigator.language || "uk-UA");
+  return {
+    deviceModel: browser.trim(),
+    systemVersion: os.trim(),
+    appVersion: "1.2 Web",
+    langCode: lang.split("-")[0].toLowerCase(),
+    systemLangCode: lang,
+  };
+}
+
 async function newClient(){
   if (client){ try { await client.disconnect(); } catch {} }
-  client = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 3 });
+  client = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 3, ...clientInfo() });
   await client.connect();
 }
 
